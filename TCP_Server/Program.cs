@@ -12,15 +12,14 @@ namespace TCP_Server
 {
     class Constants
     {
-        public const string Localhost = "10.0.0.10";
+        public const string Localhost = "127.0.0.1";
+        public const string ServerIp = "10.0.176.9";
 
         // Ports
         public const int HTTP_PORT = 80;
         public const int DEFAULT_SERVER_PORT = 50001;
 
-        // Buffer sizes
-        public const int CLIENT_READ_BUFFER = 1024;
-        public const int CLIENT_WRITE_BUFFER = 1024;
+        // Buffer 
         public const int SERVER_READ_BUFFER = 1024 * 1024; // 1 MB
         public const int SERVER_WRITE_BUFFER = 1024 * 1024; // 1 MB
 
@@ -32,11 +31,11 @@ namespace TCP_Server
         private int port;
         private IPAddress ip;
 
-        public Listener(int port)
+        public Listener(string serverIp = Constants.Localhost, int port = Constants.DEFAULT_SERVER_PORT)
         {
             this.port = port;
-            this.ip = IPAddress.Parse(Constants.Localhost);
-            this._server = new TcpListener(this.ip, this.port);
+            this.ip = IPAddress.Parse(serverIp);
+            this._server = new TcpListener(ip, this.port);
         }
 
         public void Start()
@@ -57,9 +56,11 @@ namespace TCP_Server
 
                 if (client.Connected)
                 {
-                    Thread clientThread = new Thread(() => RequestRespond(client));
-                    //Thread clientThread = new Thread(() => RequestForward(client));
-                    clientThread.Start();
+                    //Thread clientThread = new Thread(() => RequestRespond(client));
+                    ////Thread clientThread = new Thread(() => RequestForward(client));
+                    //clientThread.Start();
+
+                    RequestRespond(client);
                 }
             }
         }
@@ -68,94 +69,49 @@ namespace TCP_Server
         {
             Console.WriteLine("Connected!");
 
-            byte[] bytes = new byte[Constants.SERVER_READ_BUFFER];
+            byte[] fileName = new byte[Constants.SERVER_READ_BUFFER];
             NetworkStream stream = client.GetStream();
 
+            int fileLength;
 
-            while (true)
+            fileLength = stream.Read(fileName, 0, fileName.Length);
+
+            if (fileLength <= 0)
             {
-                int bytesRead = 0;
-                do
-                {
-                    bytesRead = Read(stream, bytes);
-                    if (bytesRead <= 0)
-                    {
-                        goto Finished;
-                    }
-
-                    byte[] msg = ProcessMsg(bytes, bytesRead);
-
-                    int bytesWritten = Write(stream, msg);
-
-                } while (bytesRead == Constants.SERVER_READ_BUFFER);
+                return;
             }
-            Finished:
-            stream.Close();
-            client.Close();
+
+            string requestFile = System.Text.Encoding.ASCII.GetString(fileName, 0, fileLength);
+            Console.WriteLine("Server received request for: {0} ClientIp: {1}", requestFile);
+
+            WriteFile(stream, requestFile);
         }
 
-        public static int Read(NetworkStream stream, Byte[] bytes)
+        public static void WriteFile(NetworkStream stream, string requestFile)
         {
-            int i = 0;
+            byte[] fileData = File.ReadAllBytes(requestFile);
 
-            // Loop to receive all the data sent by the client.
-            try
-            {
-                i = stream.Read(bytes, 0, bytes.Length);
-            }
-            catch (SocketException)
-            {
-                return -1;
-            }
-            return i;
-        }
+            byte[] lengthMsg = BitConverter.GetBytes(fileData.Length);
+            Console.WriteLine("Lenght of file is : {0}", fileData.Length);
 
-        public static byte[] ProcessMsg(byte[] bytes, int bytesRead)
-        {
-            string data = string.Empty;
+            // Send length of File first
+            stream.Write(lengthMsg, 0, lengthMsg.Length);
 
-            data = System.Text.Encoding.ASCII.GetString(bytes, 0, bytesRead);
-            Console.WriteLine("Server Received len {0}: {1}", bytes.Length, data);
-            data.ToUpper();
-
-            byte[] msg = System.Text.Encoding.ASCII.GetBytes(data);
-            return msg;
-        }
-
-        public static int Write(NetworkStream stream, byte[] msg)
-        {
-            string fileName = string.Format(@"File{0}mb_{1}.zip", 10, 1);
-            // byte[] data = File.ReadAllBytes(fileName);
-            byte[] b = new byte[256 * 1024];
-            long totalBytesSent = 0;
-
-            using (FileStream fs = File.OpenRead(fileName))
-            {
-                while (fs.Read(b, 0, b.Length) > 0)
-                {
-                    stream.Write(b, 0, b.Length);
-                    totalBytesSent += b.Length;
-                }
-            }
-
-
-            // Send back a response.
-           //  stream.Write(data, 0, data.Length);
-            Console.WriteLine("Server sent bytes: {0}", totalBytesSent);
-            //Console.WriteLine("Server Sent: {0}", msg);
-            return msg.Length;
-
+            // Send File data
+            
+            stream.Write(fileData, 0, fileData.Length);
         }
 
         static void Main(string[] args)
         {
-            new Thread(Server).Start();
+            //new Thread(Server).Start();
 
-            Thread.Sleep(Timeout.Infinite);
+            //Thread.Sleep(Timeout.Infinite);
+            Server();
         }
         static void Server()
         {
-            Listener newListener = new Listener(Constants.DEFAULT_SERVER_PORT);
+            Listener newListener = new Listener(Constants.ServerIp, Constants.DEFAULT_SERVER_PORT);
             newListener.Start();
             newListener.Accept();
             newListener.Stop();
