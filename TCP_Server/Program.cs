@@ -12,7 +12,8 @@ namespace TCP_Server
 {
     class Constants
     {
-        public const string Localhost = "10.0.0.10";
+        public const string Localhost = "127.0.0.1";
+        public const string ServerIp = "10.0.0.10";
 
         // Ports
         public const int HTTP_PORT = 80;
@@ -32,11 +33,11 @@ namespace TCP_Server
         private int port;
         private IPAddress ip;
 
-        public Listener(int port)
+        public Listener(string serverIp = Constants.Localhost, int port = Constants.DEFAULT_SERVER_PORT)
         {
             this.port = port;
-            this.ip = IPAddress.Parse(Constants.Localhost);
-            this._server = new TcpListener(this.ip, this.port);
+            this.ip = IPAddress.Parse(serverIp);
+            this._server = new TcpListener(ip, this.port);
         }
 
         public void Start()
@@ -155,7 +156,7 @@ namespace TCP_Server
         }
         static void Server()
         {
-            Listener newListener = new Listener(Constants.DEFAULT_SERVER_PORT);
+            Listener newListener = new Listener(Constants.Localhost, Constants.DEFAULT_SERVER_PORT);
             newListener.Start();
             newListener.Accept();
             newListener.Stop();
