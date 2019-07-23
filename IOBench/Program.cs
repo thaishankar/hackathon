@@ -14,18 +14,19 @@ namespace IOBench
         private const int WriteBufferSize = 1024 * 1024; // Deal with 1MiB chucks at a time
         private const string ResultsFilename = "resultsDisk.csv";
         private const int FullIOSize = 10 * 1024 * 1024; // 10MiB IOs
-        private const int SweepSize = 10;
+        private const int SweepSize = 50;
+        private const byte TestDatum = 66; // ASCII 'B'
 
         static void Main(string[] args)
         {
-            if(args.Length != 2)
+            if(args.Length != 1)
             {
-                Console.WriteLine("Usage: {0} <Test Directory Path>", args[0]);
+                Console.WriteLine("Usage: IOBench.exe <Test Directory Path>");
                 return;
             }
 
             // Setup the test directory
-            string testDir = args[1];
+            string testDir = args[0];
             if (Directory.Exists(testDir))
             {
                 Directory.CreateDirectory(testDir);
@@ -142,8 +143,27 @@ namespace IOBench
 
                     bytesRead = reader.Read(dataBuffer, 0, bytesToRead);
                     bytesRemaining -= bytesRead;
+
+                    // Only uncomment inorder to validate write-finishing/write-read coherence (Significant slow down)
+                    //for (int b = 0; b <bytesToRead; b++)
+                    //{
+                    //    if (dataBuffer[b] != TestDatum)
+                    //    {
+                    //        Console.WriteLine("Didn't not read the expected data value for dataBuffer[{0}].", b);
+                    //    }
+                    //}
                 } while (bytesRemaining > 0);
+                reader.Close();
                 watch.Stop();
+
+                // Sanity Check the data retrieved (via the last round of the buffer)
+                for(int b = 0; b < dataBuffer.Length; b++)
+                {
+                    if(dataBuffer[b] != TestDatum)
+                    {
+                        Console.WriteLine("Didn't not read the expected data value for dataBuffer[{0}].", b);
+                    }
+                }
 
             }
             catch (Exception ex)
@@ -161,7 +181,7 @@ namespace IOBench
             byte[] dataBuffer = new byte[WriteBufferSize];
             for(int b = 0; b < dataBuffer.Length; b++)
             {
-                dataBuffer[b] = 66; // Ascii 'B'
+                dataBuffer[b] = TestDatum;
             }
 
             int bytesToWrite;
@@ -174,7 +194,8 @@ namespace IOBench
                 {
                     File.Delete(filepath);
                 }
-                FileStream writer = new FileStream(filepath, FileMode.CreateNew);
+                // Force write-through to see true disk performance
+                FileStream writer = new FileStream(filepath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 100, FileOptions.WriteThrough);
 
                 watch.Start();
                 do
@@ -191,6 +212,8 @@ namespace IOBench
                     writer.Write(dataBuffer, 0, bytesToWrite);
                     bytesRemaining -= bytesToWrite;
                 } while (bytesRemaining > 0);
+                writer.Flush();
+                writer.Close();
                 watch.Stop();
 
             }
